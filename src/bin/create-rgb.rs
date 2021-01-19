@@ -43,6 +43,11 @@ struct Opt {
     /// Show loggap cost
     #[structopt(short, long)]
     loggap: bool,
+
+    /// Sort leaf by identifier
+    #[structopt(short, long)]
+    sort_leaf: bool,
+    
 }
 
 fn compute_loggapsum<P: AsRef<std::path::Path>>(file_path: P) -> (f64, usize) {
@@ -118,6 +123,7 @@ fn main() -> Result<()> {
         opt.swap_iterations,
         opt.recursion_stop,
         pb.clone(),
+        opt.sort_leaf,
     );
     pb.finish_and_clear();
     let rgb_time = start_rgb.elapsed().as_secs_f32();
