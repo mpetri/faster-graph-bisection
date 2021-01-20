@@ -3,7 +3,12 @@ use thiserror::Error;
 
 use crate::ciff;
 
-#[derive(Default, Clone, Debug)]
+use std::fs::File;
+use bincode::{serialize_into, deserialize_from};
+use std::io::{BufWriter};
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Default, PartialEq, Clone, Debug)]
 pub struct Doc {
     pub terms: Vec<u32>,
     pub org_id: u32,
@@ -18,15 +23,33 @@ pub enum Error {
     CiffOpenError,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Forward {
     pub docs: Vec<Doc>,
     pub uniq_terms: usize,
 }
 
+
+pub fn from_file<P: AsRef<std::path::Path>>(
+    file_path: P
+//) -> Result<Forward, bincode::Error> {
+//    let in_file = std::io::BufReader::new(std::fs::File::open(file_path)?);
+//    deserialize_from(in_file)
+//}
+) -> Result<Forward, Error> {
+    let in_file = std::fs::File::open(file_path)?;
+    let in_file = std::io::BufReader::new(in_file);
+    let binary_fidx: Vec<u8> = deserialize_from(in_file).unwrap(); 
+    let forward_idx: Forward = bincode::deserialize(&binary_fidx).unwrap();
+    Ok(forward_idx)
+}
+
+
 pub fn from_ciff<P: AsRef<std::path::Path>>(
     file_path: P,
     min_len: usize,
     cutoff_frequency: f32,
+    output_path: Option<P>,
 ) -> Result<Forward, Error> {
     let ciff_file = std::fs::File::open(file_path)?;
     let mut ciff_file = std::io::BufReader::new(ciff_file);
@@ -85,8 +108,13 @@ pub fn from_ciff<P: AsRef<std::path::Path>>(
     info!("\tdiscarded infrequent terms: {}", infrequent_terms);
     info!("\tremaining terms: {}", term_id + 1);
 
-    Ok(Forward {
-        docs,
-        uniq_terms,
-    })
+    let forward_idx = Forward { docs, uniq_terms };
+
+    if let Some(path) = output_path {
+        info!("Saving forward index to file: {:?}", path.as_ref().to_str());
+        let mut of = BufWriter::new(File::create(path).unwrap());
+        serialize_into(&mut of, &forward_idx).unwrap(); 
+    }
+
+    Ok(forward_idx)
 }

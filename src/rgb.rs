@@ -127,11 +127,13 @@ pub fn recursive_graph_bisection(
     num_terms: usize,
     iterations: usize,
     min_partition_size: usize,
+    max_depth: usize,
+    depth: usize,
     progress: indicatif::ProgressBar,
     sort_leaf: bool,
 ) {
     // recursion end?
-    if docs.len() <= min_partition_size {
+    if docs.len() <= min_partition_size || depth > max_depth {
         // Sort leaf by input identifier
         if sort_leaf {
             docs.sort_by(|a, b| a.org_id.cmp(&b.org_id));
@@ -154,10 +156,10 @@ pub fn recursive_graph_bisection(
         let progress_left = progress.clone();
         let progress_right = progress.clone();
         s.spawn(|_| {
-            recursive_graph_bisection(&mut left, num_terms, iterations, min_partition_size, progress_left, sort_leaf);
+            recursive_graph_bisection(&mut left, num_terms, iterations, min_partition_size, max_depth, depth+1, progress_left, sort_leaf);
         });
         s.spawn(|_| {
-            recursive_graph_bisection(&mut right, num_terms, iterations, min_partition_size, progress_right, sort_leaf);
+            recursive_graph_bisection(&mut right, num_terms, iterations, min_partition_size, max_depth, depth+1, progress_right, sort_leaf);
         });
     });
 }

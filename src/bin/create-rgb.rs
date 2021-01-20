@@ -22,7 +22,7 @@ struct Opt {
 
     /// Output ciff file
     #[structopt(short, long, parse(from_os_str))]
-    output: PathBuf,
+    output_ciff: Option<PathBuf>,
 
     /// Minimum number of occurrences to consider
     #[structopt(short, long, default_value = "4096")]
@@ -45,8 +45,24 @@ struct Opt {
     loggap: bool,
 
     /// Sort leaf by identifier
-    #[structopt(short, long)]
+    #[structopt(long)]
     sort_leaf: bool,
+
+    /// Maximum depth
+    #[structopt(long, default_value = "100")]
+    max_depth: usize,
+
+    /// Read forward index
+    #[structopt(long, parse(from_os_str))]
+    input_fidx: Option<PathBuf>,
+
+    /// Output forward index
+    #[structopt(long, parse(from_os_str))]
+    output_fidx: Option<PathBuf>,
+
+    /// Dump the document map
+    #[structopt(long, parse(from_os_str))]
+    output_mapping: Option<PathBuf>,
     
 }
 
@@ -94,9 +110,18 @@ fn main() -> Result<()> {
     let opt = Opt::from_args();
     info!("{:?}", opt);
 
+    // Sanity check output options. We want to at least dump the map, dump the ciff, or dump the fidx...
+    if opt.output_fidx.is_none() && opt.output_ciff.is_none() && opt.output_mapping.is_none() {
+        info!("Error: Nothing will be output. Check your options and try again.");
+        std::process::exit(1);
+    }
+
+    // Check that we're not trying to both read and write a pre-existing forward index
     let start_fwd = std::time::Instant::now();
-    info!("(1) create forward index from ciff");
-    let forward::Forward { mut docs, uniq_terms } = forward::from_ciff(&opt.input, opt.min_len, opt.cutoff_frequency)?;
+    let forward::Forward { mut docs, uniq_terms } = match opt.input_fidx {
+    	Some(index) => {info!("(1) reading forward index from file"); forward::from_file(index)?},
+    	None => {info!("(1) building forward index"); forward::from_ciff(&opt.input, opt.min_len, opt.cutoff_frequency, opt.output_fidx.as_ref())?},
+    };
 
     // move all empty docs to the end and exclude them from reordering
     info!("(2) sort empty docs to the back");
@@ -117,11 +142,14 @@ fn main() -> Result<()> {
 
     info!("(3) perform graph bisection");
     let start_rgb = std::time::Instant::now();
+    let depth = 1;
     rgb::recursive_graph_bisection(
         &mut docs[..num_non_empty],
         uniq_terms,
         opt.swap_iterations,
         opt.recursion_stop,
+        opt.max_depth,
+        depth,
         pb.clone(),
         opt.sort_leaf,
     );
@@ -136,26 +164,40 @@ fn main() -> Result<()> {
         doc.terms.shrink_to_fit();
     });
 
-    info!("(5) write new ciff file");
-    let start_write = std::time::Instant::now();
-    output::rewrite_ciff(&docs, &opt.input, &opt.output)?;
-    let write_time = start_write.elapsed().as_secs_f32();
-    info!("write duration: {:.2} secs", write_time);
+    info!("(5) starting output operations...");
 
+ 
+    if let Some(output_map) = opt.output_mapping {
+        info!(" --> (5.1) output the plain-text mapping file");
+        output::dump_order(&docs, output_map);
+    }
+
+    if let Some(output_ciff) = opt.output_ciff {
+        info!(" --> (5.2) write new ciff file");
+        let start_write = std::time::Instant::now();
+        output::rewrite_ciff(&docs, &opt.input, &output_ciff)?;
+        let write_time = start_write.elapsed().as_secs_f32();
+        info!("write duration: {:.2} secs", write_time);
+        
+        if opt.loggap {
+            info!("(6) compute loggap cost");
+            let (before_log_sum, num_postings) = compute_loggapsum(&opt.input);
+            let before_bpi = before_log_sum / num_postings as f64;
+            info!("\tbefore reorder: {:.3} BPI",before_bpi);
+            let (after_log_sum, num_postings) = compute_loggapsum(&output_ciff);
+            let after_bpi = after_log_sum / num_postings as f64;
+            info!("\t after reorder: {:.3} BPI",after_bpi);
+        }
+    } else {
+        if opt.loggap {
+            info!("cannot compute loggap as the ciff file was not saved");
+        }
+    }
+    
 
     let all_done_time = start_fwd.elapsed().as_secs_f32();
 
-    if opt.loggap {
-        info!("(6) compute loggap cost");
-        let (before_log_sum, num_postings) = compute_loggapsum(&opt.input);
-        let before_bpi = before_log_sum / num_postings as f64;
-        info!("\tbefore reorder: {:.3} BPI",before_bpi);
-        let (after_log_sum, num_postings) = compute_loggapsum(&opt.output);
-        let after_bpi = after_log_sum / num_postings as f64;
-        info!("\t after reorder: {:.3} BPI",after_bpi);
-    }
-
     info!("ALL DONE! duration: {:.2} secs", all_done_time);
-
+    
     Ok(())
 }
