@@ -13,6 +13,7 @@ pub struct Doc {
     pub terms: Vec<u32>,
     pub org_id: u32,
     pub gain: f32,
+    pub leaf_id: i32,
 }
 
 #[derive(Error, Debug)]
@@ -32,18 +33,10 @@ pub struct Forward {
 
 pub fn from_file<P: AsRef<std::path::Path>>(
     file_path: P
-//) -> Result<Forward, bincode::Error> {
-//    let in_file = std::io::BufReader::new(std::fs::File::open(file_path)?);
-//    deserialize_from(in_file)
-//}
-) -> Result<Forward, Error> {
-    let in_file = std::fs::File::open(file_path)?;
-    let in_file = std::io::BufReader::new(in_file);
-    let binary_fidx: Vec<u8> = deserialize_from(in_file).unwrap(); 
-    let forward_idx: Forward = bincode::deserialize(&binary_fidx).unwrap();
-    Ok(forward_idx)
+) -> Result<Forward, bincode::Error> {
+    let in_file = std::io::BufReader::new(std::fs::File::open(file_path)?);
+    deserialize_from(in_file)
 }
-
 
 pub fn from_ciff<P: AsRef<std::path::Path>>(
     file_path: P,
@@ -62,6 +55,7 @@ pub fn from_ciff<P: AsRef<std::path::Path>>(
             terms: Vec::with_capacity(256), // initial estimate for uniq terms in doc
             org_id: doc_id as u32,
             gain: 0.0,
+            leaf_id: -1,
         });
     }
     let cutoff_len: usize = (num_docs as f32 * cutoff_frequency).ceil() as usize;

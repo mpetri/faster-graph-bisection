@@ -7,7 +7,7 @@ use std::io::Write;
 pub fn dump_order<P: AsRef<std::path::Path>>(docs: &[Doc], output_map: P) {
     let mut out = std::fs::File::create(output_map).expect("can not open output mapping file");
     for (new_id, doc) in docs.iter().enumerate() {
-        std::writeln!(out, "{} {}", doc.org_id, new_id).expect("can not write to output mapping file");
+        std::writeln!(out, "{} {} {}", doc.org_id, new_id, doc.leaf_id).expect("can not write to output mapping file");
     }
 }
 
