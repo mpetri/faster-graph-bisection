@@ -152,7 +152,7 @@ fn main() -> Result<()> {
         depth,
         pb.clone(),
         opt.sort_leaf,
-        "".to_string()
+        0
     );
     pb.finish_and_clear();
     let rgb_time = start_rgb.elapsed().as_secs_f32();
