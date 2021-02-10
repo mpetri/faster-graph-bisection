@@ -92,6 +92,24 @@ fn compute_loggapsum<P: AsRef<std::path::Path>>(file_path: P) -> (f64, usize) {
     (log_sum, num_postings)
 }
 
+fn validate_gain() {
+
+    let gain_func: Option<&'static str> = std::option_env!("GAIN");
+    if gain_func.is_none() {
+        log::info!("Error: A gain function needs to be passed at compile time via the environment variable `GAIN` -- Please recompile...");
+        std::process::exit(1);
+    }
+    let gain_func = gain_func.unwrap();
+    let gain_types = vec!["default", "approx_1", "approx_2"];
+    if gain_types.iter().any(|&i| i == gain_func) {
+        log::info!("Using the `{}` gain function.", gain_func);
+    } else {
+        log::info!("Error: Couldn't match the gain function.");
+        std::process::exit(1); 
+    }
+}
+
+
 fn main() -> Result<()> {
     CombinedLogger::init(vec![
         TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed),
@@ -107,11 +125,14 @@ fn main() -> Result<()> {
     ])
     .unwrap();
 
+    // validate the compile-time gain function
+    validate_gain();
+
     let opt = Opt::from_args();
     info!("{:?}", opt);
 
-    // Sanity check output options. We want to at least dump the map, dump the ciff, or dump the fidx...
-    if opt.output_fidx.is_none() && opt.output_ciff.is_none() && opt.output_mapping.is_none() {
+    // Sanity check output options. We want to at least dump the map, dump the ciff, dump the fidx, or compute loggap on the fly...
+    if opt.output_fidx.is_none() && opt.output_ciff.is_none() && opt.output_mapping.is_none() && !opt.loggap{
         info!("Error: Nothing will be output. Check your options and try again.");
         std::process::exit(1);
     }
@@ -133,12 +154,8 @@ fn main() -> Result<()> {
     let fwd_time = start_fwd.elapsed().as_secs_f32();
     info!("fwd duration: {:.2} secs", fwd_time);
     info!("docs {} non_empty {}", docs.len(), num_non_empty);
-
-    let pb = indicatif::ProgressBar::new(num_non_empty as u64);
-    pb.set_draw_delta(1000);
-    let desc =
-        "RGB: [{elapsed_precise}] [{bar:40.cyan/blue}] ({pos}/{len}, ETA {eta}, SPEED: {per_sec})";
-    pb.set_style(indicatif::ProgressStyle::default_bar().template(desc));
+    info!("put docs back into default order...");
+    docs.sort_by(|a, b| a.org_id.cmp(&b.org_id));
 
     info!("(3) perform graph bisection");
     let start_rgb = std::time::Instant::now();
@@ -150,11 +167,8 @@ fn main() -> Result<()> {
         opt.recursion_stop,
         opt.max_depth,
         depth,
-        pb.clone(),
         opt.sort_leaf,
-        0
     );
-    pb.finish_and_clear();
     let rgb_time = start_rgb.elapsed().as_secs_f32();
     info!("rgb duration: {:.2} secs", rgb_time);
 
@@ -191,7 +205,11 @@ fn main() -> Result<()> {
         }
     } else {
         if opt.loggap {
-            info!("cannot compute loggap as the ciff file was not saved");
+            info!(" --> (5.2a) Computing LogGap on remapped CIFF file, but not writing it...");
+            let start_write = std::time::Instant::now();
+            output::remap_ciff(&docs, &opt.input)?;
+            let write_time = start_write.elapsed().as_secs_f32();
+            info!("Remap + LogGap duration: {:.2} secs", write_time);
         }
     }
     
