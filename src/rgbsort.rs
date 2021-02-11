@@ -37,6 +37,10 @@ fn partition_floyd_rivest(docs: &mut [Doc], nth_el: usize,)  {
     }
 }
 
+fn partition_quickselect(docs: &mut [Doc], nth_el: usize) {
+    quickselect(docs, nth_el, 0, docs.len() - 1, nth_el);
+}
+
 // Checks if we have a partition already or not. A partition means that
 // all values to the left of the median are stricly < median, and all values
 // to the right are > median (based on document gains). Note that ties with
@@ -58,15 +62,16 @@ fn swap_docs(docs: &mut [Doc], left: usize, right: usize, median_idx: usize)  {
     // If the swap occurs entirely on one half, we don't need to update the degrees
     if (left < median_idx && right < median_idx) || (left >= median_idx && right >= median_idx) {
         docs.swap(left, right);
+    } else {
+        // Otherwise, we need to do the update...
+        docs[left].leaf_id += 1; // Moved left2right --> increment by 1
+        docs[right].leaf_id -= 1; // Moved right2left --> decrement by 1
+        docs.swap(left, right);
     }
-    // Otherwise, we need to do the update...
-    docs[left].leaf_id += 1; // Moved left2right --> increment by 1
-    docs[right].leaf_id -= 1; // Moved right2left --> decrement by 1
-    docs.swap(left, right);
 }
 
 
-// Heavy lifting for quickselect. Uses modified Floyd Rivest algorithm to `quickselect` the median document by gains
+// Heavy lifting for median partition. Uses modified Floyd Rivest algorithm to partition the median document by gains
 // Results in a modified document slice such that the median value is in its correct position, everything to the
 // left has a gain < median, and everything to the right has a gain > median. Updates the degrees during the
 // swapping process.
@@ -141,6 +146,44 @@ where
     }
 }
 
+// Heavy lifting for median partition. Uses modified quickselect algorithm to partition the median document by gains
+// Results in a modified document slice such that the median value is in its correct position, everything to the
+// left has a gain < median, and everything to the right has a gain > median. Updates the degrees during the
+// swapping process.
+fn quickselect(docs: &mut [Doc], nth_el: usize, mut left: usize, mut right: usize, median_idx: usize)
+{
+
+    loop {
+        if left == right {
+            break;
+        }
+        let mut pivot = left + (right - left) / 2; // XXX Use the median for now
+        
+        // lumunto partitioning
+        let mut pivot_gain = docs[pivot].gain;
+        swap_docs(docs, pivot, right, median_idx);
+        let mut store_idx = left;
+        for i in left..right {
+            if docs[i].gain < pivot_gain {
+                swap_docs(docs, store_idx, i, median_idx);
+                store_idx += 1;
+            }
+        }
+        swap_docs(docs, right, store_idx, median_idx);
+        pivot = store_idx;
+
+
+        if pivot == nth_el {
+            break;
+        } else if nth_el < pivot {
+            right = pivot - 1;
+        } else {
+            left = pivot + 1;
+        }
+    } 
+} 
+
+ 
 // This method will rip through the documents vector
 // and update the degrees of documents which swapped
 fn fix_degrees(
@@ -427,7 +470,7 @@ fn process_partitions(
     // compute degrees in left and right partition for each term
     let (mut left_deg, mut right_deg) = rayon::join(
         || compute_degrees_l(&docs, num_terms),
-        || compute_degrees_r(&docs, num_terms), // XXX NO MUT
+        || compute_degrees_r(&docs, num_terms), 
     );
 
     for _iter in 0..iterations {
@@ -446,6 +489,10 @@ fn process_partitions(
             //let start_gains = std::time::Instant::now();
             let median_idx = docs.len() / 2;
             partition_floyd_rivest(&mut docs, median_idx);
+            //partition_quickselect(&mut docs, median_idx);
+            //for doc in docs.iter() {
+            //    println!("{}", doc.gain);
+            //}
             //let gains_time = start_gains.elapsed().as_micros();
             //println!("quickselect it = {} depth = {} time_micro = {} total_swaps = {}", _iter, depth, gains_time, nswaps);
             let nswaps = fix_degrees(docs, &mut left_deg[..], &mut right_deg[..]);
