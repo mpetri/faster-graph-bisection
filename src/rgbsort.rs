@@ -29,52 +29,53 @@ fn cmp_log2(x: i32) -> f32 {
     }
 }
 
-
-// Taken and modified from https://github.com/frjnn/floydrivest/blob/master/src/lib.rs
-fn quick_select_with_swaps(
-    docs: &mut [Doc],
-    nth_el: usize,
-    left_degs: &mut [i32],
-    right_degs: &mut [i32],
-) -> usize {
+// Wrapper for floydrivest
+fn partition_floyd_rivest(docs: &mut [Doc], nth_el: usize,)  {
     let mut cmp = |a: &Doc, b: &Doc| a.gain.partial_cmp(&b.gain).unwrap_or(Equal);
-    modified_floydrivest(docs, nth_el, 0, docs.len() - 1, &mut cmp, left_degs, right_degs, nth_el)
+    if not_partitioned(docs, nth_el) {
+        floydrivest(docs, nth_el, 0, docs.len() - 1, &mut cmp, nth_el);
+    }
 }
 
+// Checks if we have a partition already or not. A partition means that
+// all values to the left of the median are stricly < median, and all values
+// to the right are > median (based on document gains). Note that ties with
+// the median are considered to be inconsequential to the computation
+fn not_partitioned(
+    docs: &mut [Doc],
+    median_idx: usize,
+) -> bool {
+    let median_val = docs[median_idx].gain;
+    let (left, right) = docs.split_at(median_idx);
+    left.iter().any(|d| d.gain > median_val) || right.iter().any(|d| d.gain < median_val)
+}
 
 // This function swaps two documents in the global document slice, indexed by `left` and `right`
-// If the swap occurs across the median, we also need to update the degrees. Otherwise, a simple
-// pointer swap is all that is required
-fn swap_docs(docs: &mut [Doc], left: usize, right: usize, median_idx: usize, left_degs: &mut [i32], right_degs: &mut [i32]) -> usize {
+// If the swap occurs across the median, we also need to flag that we need to update the degrees. 
+// Otherwise, a simple pointer swap is all that is required
+fn swap_docs(docs: &mut [Doc], left: usize, right: usize, median_idx: usize)  {
 
     // If the swap occurs entirely on one half, we don't need to update the degrees
     if (left < median_idx && right < median_idx) || (left >= median_idx && right >= median_idx) {
         docs.swap(left, right);
-        return 0
     }
     // Otherwise, we need to do the update...
-    for term in &docs[left].terms {
-        left_degs[*term as usize] -= 1;
-        right_degs[*term as usize] += 1;
-    }
-    for term in &docs[right].terms {
-        left_degs[*term as usize] += 1;
-        right_degs[*term as usize] -= 1;
- 
-    }
+    docs[left].leaf_id += 1; // Moved left2right --> increment by 1
+    docs[right].leaf_id -= 1; // Moved right2left --> decrement by 1
     docs.swap(left, right);
-    return 1
 }
+
 
 // Heavy lifting for quickselect. Uses modified Floyd Rivest algorithm to `quickselect` the median document by gains
 // Results in a modified document slice such that the median value is in its correct position, everything to the
 // left has a gain < median, and everything to the right has a gain > median. Updates the degrees during the
 // swapping process.
-fn modified_floydrivest<F>(docs: &mut [Doc], nth_el: usize, mut left: usize, mut right: usize, cmp: &mut F, left_degs: &mut [i32], right_degs: &mut [i32], median_idx: usize) -> usize
+// Based on https://github.com/huonw/order-stat/blob/master/src/floyd_rivest.rs
+// and https://github.com/frjnn/floydrivest/blob/master/src/lib.rs
+fn floydrivest<F>(docs: &mut [Doc], nth_el: usize, mut left: usize, mut right: usize, cmp: &mut F, median_idx: usize)
 where
     F: FnMut(&Doc, &Doc) -> Ordering,
 {
-    let mut swap_count: usize = 0;
     let mut i: usize;
     let mut j: usize;
     let mut t_idx: usize;
@@ -95,7 +96,7 @@ where
             let inner: f64 = nth_el as f64 - isn + sd;
             let ll: usize = max(left, inner as usize);
             let rr: usize = min(right, (inner + s) as usize);
-            swap_count += modified_floydrivest(docs, nth_el, ll, rr, cmp, left_degs, right_degs, median_idx);
+            floydrivest(docs, nth_el, ll, rr, cmp, median_idx);
         }
         // The following code partitions a[l : r] about t, it is similar to Hoare's
         // algorithm but it'll run faster on most machines since the subscript range
@@ -104,11 +105,10 @@ where
         i = left + 1;
         j = right - 1;
         
-        swap_count += swap_docs(docs, left, nth_el, median_idx, left_degs, right_degs);
+        swap_docs(docs, left, nth_el, median_idx);
 
-        
         if cmp(&docs[left], &docs[right]) != Ordering::Less {
-            swap_count += swap_docs(docs, left, right, median_idx, left_degs, right_degs);
+            swap_docs(docs, left, right, median_idx);
             t_idx = right;
         } else {
             t_idx = left;
@@ -119,7 +119,7 @@ where
         while cmp(&docs[j], &docs[t_idx]) == Ordering::Greater { j -= 1 }
        
         while i < j { 
-            swap_count += swap_docs(docs, i, j, median_idx, left_degs, right_degs);
+            swap_docs(docs, i, j, median_idx);
             i += 1;
             j -= 1;
             while cmp(&docs[i], &docs[t_idx]) == Ordering::Less { i +=1 }
@@ -127,10 +127,10 @@ where
         }
        
         if left == t_idx {
-            swap_count += swap_docs(docs, left, j, median_idx, left_degs, right_degs);
+            swap_docs(docs, left, j, median_idx);
         } else {
             j += 1;
-            swap_count += swap_docs(docs, j, right, median_idx, left_degs, right_degs);
+            swap_docs(docs, j, right, median_idx);
         }
         if j <= nth_el {
             left = j + 1;
@@ -139,8 +139,38 @@ where
                 right = j.saturating_sub(1);
         }
     }
-    swap_count
 }
+
+// This method will rip through the documents vector
+// and update the degrees of documents which swapped
+fn fix_degrees(
+    docs: &[Doc],
+    left_degs: &mut [i32],
+    right_degs: &mut [i32],
+) -> usize {
+    let mut num_swaps = 0;
+    for doc in docs.iter() {
+        // Doc went right to left
+        if doc.leaf_id == -1 {
+            for term in &doc.terms {
+                left_degs[*term as usize] += 1;
+                right_degs[*term as usize] -= 1;
+            }
+            num_swaps += 1;
+        } 
+        // Moved left to right
+        else if doc.leaf_id == 1 {
+            for term in &doc.terms {
+                left_degs[*term as usize] -= 1;
+                right_degs[*term as usize] += 1;
+            }
+            num_swaps += 1;
+        } 
+    }
+    num_swaps
+}
+
+
 
 // This is an alternative swap method, which assumes negative
 // numbers want to go left, and positive numbers want to go
@@ -175,7 +205,7 @@ fn swap_documents(
 }
 
 // Computes the sum of the term degrees across a slice of documents
-fn compute_degrees(docs: &[Doc], num_terms: usize) -> Vec<i32> {
+fn compute_degrees(docs: &[Doc], num_terms: usize) -> Vec<i32> { 
     let mut degrees = vec![0; num_terms];
     for doc in docs {
         for term in &doc.terms {
@@ -192,7 +222,7 @@ fn compute_degrees_l(docs: &[Doc], num_terms: usize) -> Vec<i32> {
     compute_degrees(left, num_terms)    
 }
 
-fn compute_degrees_r(docs: &[Doc], num_terms: usize) -> Vec<i32> {
+fn compute_degrees_r(docs: &[Doc], num_terms: usize) -> Vec<i32> { 
     let (_, right) = docs.split_at(docs.len() / 2);
     compute_degrees(right, num_terms)    
 }
@@ -238,6 +268,7 @@ fn compute_move_gains_default_l2r(
             doc_gain += term_gain;
         }
         doc.gain = doc_gain;
+        doc.leaf_id = 0; //XXX
     });
 }
 
@@ -258,6 +289,7 @@ fn compute_move_gains_default_r2l(
             doc_gain -= term_gain;
         }
         doc.gain = doc_gain;
+        doc.leaf_id = 0; //XXX
     });
 }
 
@@ -280,6 +312,7 @@ fn compute_move_gains_a1_l2r(
             doc_gain += term_gain;
         }
         doc.gain = doc_gain;
+        doc.leaf_id = 0; //XXX
     });
 }
 // Computes gains using the first approximation, saving two log calls
@@ -299,6 +332,7 @@ fn compute_move_gains_a1_r2l(
             doc_gain -= term_gain; // Note the negative sign here
         }
         doc.gain = doc_gain;
+        doc.leaf_id = 0; //XXX
     });
 }
 
@@ -322,6 +356,7 @@ fn compute_move_gains_a2(
             doc_gain += term_gain;
         }
         doc.gain = doc_gain;
+        doc.leaf_id = 0; //XXX
     });
 }
 
@@ -392,20 +427,28 @@ fn process_partitions(
     // compute degrees in left and right partition for each term
     let (mut left_deg, mut right_deg) = rayon::join(
         || compute_degrees_l(&docs, num_terms),
-        || compute_degrees_r(&docs, num_terms),
+        || compute_degrees_r(&docs, num_terms), // XXX NO MUT
     );
 
     for _iter in 0..iterations {
     
-        if depth < 5 { // quickselect
+        if true { // quickselect
 
+            //let start_gains = std::time::Instant::now();
             // Split in half and compute gains
             {
                 let (mut left, mut right) = docs.split_at_mut(docs.len() / 2);
                 compute_gains(&mut left, &mut right, &left_deg[..], &right_deg[..]);
             }
+            //let gains_time = start_gains.elapsed().as_micros();
+            //println!("gains it = {} depth = {} time_micro = {}", _iter, depth, gains_time);
+ 
+            //let start_gains = std::time::Instant::now();
             let median_idx = docs.len() / 2;
-            let nswaps = quick_select_with_swaps(&mut docs, median_idx, &mut left_deg[..], &mut right_deg[..]);
+            partition_floyd_rivest(&mut docs, median_idx);
+            //let gains_time = start_gains.elapsed().as_micros();
+            //println!("quickselect it = {} depth = {} time_micro = {} total_swaps = {}", _iter, depth, gains_time, nswaps);
+            let nswaps = fix_degrees(docs, &mut left_deg[..], &mut right_deg[..]);
             if nswaps == 0 {
                 break;
             }
@@ -413,11 +456,23 @@ fn process_partitions(
 
             // We do the split here, because if we decide later that we want to do something
             // with the whole document partition, we can refactor easily...
+            let start_gains = std::time::Instant::now();
             let (mut left, mut right) = docs.split_at_mut(docs.len() / 2);
             compute_gains(&mut left, &mut right, &left_deg[..], &right_deg[..]);
+            let gains_time = start_gains.elapsed().as_micros();
+            println!("gains it = {} depth = {} time_micro = {}", _iter, depth, gains_time);
+   
+            let start_gains = std::time::Instant::now();
             left.par_sort_by(|a, b| b.gain.partial_cmp(&a.gain).unwrap_or(Equal)); // Sort gains high to low
             right.par_sort_by(|a, b| a.gain.partial_cmp(&b.gain).unwrap_or(Equal)); // Sort gains low to high
+            let gains_time = start_gains.elapsed().as_micros();
+            println!("sort it = {} depth = {} time_micro = {}", _iter, depth, gains_time);
+ 
+            let start_gains = std::time::Instant::now();
             let nswaps = swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..]);
+            let gains_time = start_gains.elapsed().as_micros();
+            println!("swaps it = {} depth = {} time_micro = {} total_swaps = {}", _iter, depth, gains_time, nswaps);
+ 
             if nswaps == 0 {
                 break;
             }
