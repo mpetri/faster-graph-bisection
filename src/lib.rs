@@ -1,8 +1,8 @@
 
 pub mod forward;
-pub mod rgb;
+pub mod rgbsort;
 pub mod ciff;
 pub mod output;
 
-pub use rgb::recursive_graph_bisection;
+pub use rgbsort::recursive_graph_bisection;
 
