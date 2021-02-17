@@ -557,7 +557,12 @@ fn compute_gains(mut left: &mut [Doc], mut right: &mut [Doc], ldeg: &[i32], rdeg
 }
 
 
+// XXX uses quickselect by default. If QUICKSELECT is not enabled,
+// the sort-based method will be used. If PSORT is true, the sorts
+// will be invoked in parallel. Otherwise, sequential sorts will be
+// used.
 const QUICKSELECT:bool = true;
+const PSORT:bool = true;
 // The heavy lifting -- core logic for the BP process
 fn process_partitions(
     mut docs: &mut [Doc],
@@ -583,7 +588,7 @@ fn process_partitions(
             // Use quickselect to partition the global doc slice into < median and > median
             let median_idx = docs.len() / 2;
             partition_quickselect(&mut docs, median_idx, 0.0);
-            //partition_quickselect(&mut docs, median_idx, _iter as f32); // Simulated annealing
+            //partition_quickselect(&mut docs, median_idx, (_iter as f32) * 0.5); // Simulated annealing
             
             // Go through swapped documents and fix the term degrees
             let nswaps = fix_degrees(docs, &mut left_deg[..], &mut right_deg[..]);
@@ -601,9 +606,14 @@ fn process_partitions(
             compute_gains(&mut left, &mut right, &left_deg[..], &right_deg[..]);
 
             // Use parallel sorts on each half to re-arrange documents by their gains
-            left.par_sort_by(|a, b| b.gain.partial_cmp(&a.gain).unwrap_or(Equal)); // Sort gains high to low
-            right.par_sort_by(|a, b| a.gain.partial_cmp(&b.gain).unwrap_or(Equal)); // Sort gains low to high
- 
+            if PSORT {
+                left.par_sort_by(|a, b| b.gain.partial_cmp(&a.gain).unwrap_or(Equal)); // Sort gains high to low
+                right.par_sort_by(|a, b| a.gain.partial_cmp(&b.gain).unwrap_or(Equal)); // Sort gains low to high
+            } else {
+                left.sort_by(|a, b| b.gain.partial_cmp(&a.gain).unwrap_or(Equal)); // Sort gains high to low
+                right.sort_by(|a, b| a.gain.partial_cmp(&b.gain).unwrap_or(Equal)); // Sort gains low to high
+            }
+
             // Go through and swap documents between partitions
             let nswaps = swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..], 0.0);
             //let nswaps = swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..], _iter as f32); // Simulated annealing
