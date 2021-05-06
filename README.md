@@ -98,6 +98,7 @@ So, with this configuration:
  - maximum postings length of 0.1 * N (where N is the number of documents in the collection), 
  - 20 iterations per level, and 
  - the recursion depth fixed by only recursing while there are more than 16 elements within each partition,
+
 we observe the RGB process taking about 10 seconds, improving loggap from 3.975 to 2.968.
 
 Running the same configuration with the `default` gain function takes about 20 seconds, and yields a final 
@@ -138,4 +139,15 @@ For example, you can save a forward index using the `--output-fidx` command, and
 with the `--input-fidx` flag. If you only wish to dump the reordered document map, use the `--output-mapping`
 flag. 
 
-##
+## Algorithmic Configurations
+Other algorithmic configurations can be made inside the codebase (sorry). For example, the default behavior
+uses the Floyd-Rivest median partitioning approach to "sort" documents between partitions. You can instead
+invoke sorting behavior (and, indeed, parallel sorts) by modifying the flags on lines 564 and 565 of the
+`src/rgb.rs` file. 
+
+You can also explore the simulated annealing techniques we tested by providing a `tolerance`
+parameter to either the `partition_quickselect` or `swap_documents` functions, depending on
+which you are using. Some examples are shown in the codebase (see `src/rgb.rs` line 591 and 619).
+
+## Support
+Feel free to raise issues here, we'll do our best to assist.
