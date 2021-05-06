@@ -598,7 +598,7 @@ fn process_partitions(
 
         } 
         
-        // Regular sort+swap method. Note that this uses a parallel sort.
+        // Regular sort+swap method. Note that this uses a parallel sort if PSORT is set to `true`.
         else {
 
             // Split in half and compute gains

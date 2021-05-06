@@ -74,7 +74,6 @@ pub fn rewrite_ciff<P: AsRef<std::path::Path>>(docs: &[Doc], input_ciff: P, outp
     let mut document_mapping: Vec<u32> = vec![0; docs.len()];
     for (new_id, doc) in docs.iter().enumerate() {
         document_mapping[doc.org_id as usize] = new_id as u32;
-        println!("{} {}", doc.org_id, new_id);
     }
     // (2) read the original ciff and remap ids, write the new ciff
     log::info!("writing to ciff file: {}",&output_ciff.as_ref().display());
