@@ -12,7 +12,7 @@ our work:
  title = {Faster Index Reordering with Bipartite Graph Partitioning},
  author = {J. Mackenzie and M. Petri and A. Moffat},
  booktitle = {Proc. SIGIR},
- pages = {To Appear},
+ pages = {1910--1914},
  year = {2021},
 }
 ```
