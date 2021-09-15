@@ -5,6 +5,17 @@ use rayon::slice::ParallelSliceMut;
 use std::cmp::Ordering::Equal;
 use std::cmp::{min, max};
 
+// XXX uses quickselect by default. If QUICKSELECT is not enabled,
+// the sort-based method will be used. If PSORT is true, the sorts
+// will be invoked in parallel. Otherwise, sequential sorts will be
+// used.
+const QUICKSELECT:bool = true;
+const PSORT:bool = true;
+
+// XXX does not use cooling by default. But if you enable this flag,
+// cooling will be activated.
+const COOLING:bool = false;
+
 // log2(e) approximation 
 const LOG2_E: f32 = 1.44269504089;
 
@@ -557,12 +568,6 @@ fn compute_gains(mut left: &mut [Doc], mut right: &mut [Doc], ldeg: &[i32], rdeg
 }
 
 
-// XXX uses quickselect by default. If QUICKSELECT is not enabled,
-// the sort-based method will be used. If PSORT is true, the sorts
-// will be invoked in parallel. Otherwise, sequential sorts will be
-// used.
-const QUICKSELECT:bool = true;
-const PSORT:bool = true;
 // The heavy lifting -- core logic for the BP process
 fn process_partitions(
     mut docs: &mut [Doc],
@@ -587,9 +592,13 @@ fn process_partitions(
 
             // Use quickselect to partition the global doc slice into < median and > median
             let median_idx = docs.len() / 2;
-            partition_quickselect(&mut docs, median_idx, 0.0);
-            //partition_quickselect(&mut docs, median_idx, (_iter as f32) * 0.5); // Simulated annealing
-            
+
+            if COOLING {
+                partition_quickselect(&mut docs, median_idx, (_iter as f32) * 0.5); // Simulated annealing
+            } else {
+                partition_quickselect(&mut docs, median_idx, 0.0);
+            }
+
             // Go through swapped documents and fix the term degrees
             let nswaps = fix_degrees(docs, &mut left_deg[..], &mut right_deg[..]);
             if nswaps == 0 {
@@ -615,9 +624,12 @@ fn process_partitions(
             }
 
             // Go through and swap documents between partitions
-            let nswaps = swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..], 0.0);
-            //let nswaps = swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..], _iter as f32); // Simulated annealing
- 
+            let nswaps = if COOLING {
+                swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..], _iter as f32) // Simulated annealing
+            } else {
+                swap_documents(&mut left, &mut right, &mut left_deg[..], &mut right_deg[..], 0.0)
+            };
+
             if nswaps == 0 {
                 break;
             }
