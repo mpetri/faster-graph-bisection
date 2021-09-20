@@ -11,6 +11,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Default, PartialEq, Clone, Debug)]
 pub struct Doc {
     pub terms: Vec<u32>,
+    pub weights: Vec<u32>,
     pub org_id: u32,
     pub gain: f32,
     pub leaf_id: i32,
@@ -53,6 +54,7 @@ pub fn from_ciff<P: AsRef<std::path::Path>>(
     for doc_id in 0..num_docs {
         docs.push(Doc {
             terms: Vec::with_capacity(256), // initial estimate for uniq terms in doc
+            weights: Vec::with_capacity(256),
             org_id: doc_id as u32,
             gain: 0.0,
             leaf_id: -1,
@@ -88,6 +90,7 @@ pub fn from_ciff<P: AsRef<std::path::Path>>(
         for posting in postings {
             doc_id += posting.get_docid() as usize;
             docs[doc_id].terms.push(term_id);
+            docs[doc_id].weights.push(posting.get_tf() as u32);
         }
         term_id += 1;
         uniq_terms += 1;
@@ -95,6 +98,7 @@ pub fn from_ciff<P: AsRef<std::path::Path>>(
     pb_plist.finish_and_clear();
     for doc in docs.iter_mut() {
         doc.terms.shrink_to_fit();
+        doc.weights.shrink_to_fit();
     }
     info!("forward index stats:");
     info!("\ttotal terms: {}", total_terms);
