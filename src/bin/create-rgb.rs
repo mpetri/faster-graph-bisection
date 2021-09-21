@@ -146,10 +146,10 @@ fn main() -> Result<()> {
 
     // move all empty docs to the end and exclude them from reordering
     info!("(2) sort empty docs to the back");
-    docs.sort_by(|a, b| b.terms.len().cmp(&a.terms.len()));
+    docs.sort_by(|a, b| b.postings.len().cmp(&a.postings.len()));
     let num_non_empty = docs
         .iter()
-        .position(|d| d.terms.len() == 0)
+        .position(|d| d.postings.len() == 0)
         .unwrap_or(docs.len());
     let fwd_time = start_fwd.elapsed().as_secs_f32();
     info!("fwd duration: {:.2} secs", fwd_time);
@@ -175,8 +175,8 @@ fn main() -> Result<()> {
     // now we can clear some space
     info!("(4) clear forward index");
     docs.par_iter_mut().for_each(|doc| {
-        doc.terms.truncate(0);
-        doc.terms.shrink_to_fit();
+        doc.postings.truncate(0);
+        doc.postings.shrink_to_fit();
     });
 
     info!("(5) starting output operations...");

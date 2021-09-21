@@ -303,7 +303,7 @@ fn fix_degrees(
     for doc in docs.iter() {
         // Doc went right to left
         if doc.leaf_id == -1 {
-            for term in &doc.terms {
+            for (term, _) in &doc.postings {
                 left_degs[*term as usize] += 1;
                 right_degs[*term as usize] -= 1;
             }
@@ -311,7 +311,7 @@ fn fix_degrees(
         } 
         // Moved left to right
         else if doc.leaf_id == 1 {
-            for term in &doc.terms {
+            for (term, _) in &doc.postings {
                 left_degs[*term as usize] -= 1;
                 right_degs[*term as usize] += 1;
             }
@@ -338,11 +338,11 @@ fn swap_documents(
     let mut num_swaps = 0;
     for (l, r) in left.iter_mut().zip(right.iter_mut()) {
         if l.gain - r.gain > tolerance {
-            for term in &l.terms {
+            for (term, _) in &l.postings {
                 left_degs[*term as usize] -= 1;
                 right_degs[*term as usize] += 1;
             }
-            for term in &r.terms {
+            for (term, _) in &r.postings {
                 left_degs[*term as usize] += 1;
                 right_degs[*term as usize] -= 1;
             }
@@ -359,7 +359,7 @@ fn swap_documents(
 fn compute_degrees(docs: &[Doc], num_terms: usize) -> Vec<i32> { 
     let mut degrees = vec![0; num_terms];
     for doc in docs {
-        for term in &doc.terms {
+        for (term, _) in &doc.postings {
             degrees[*term as usize] += 1;
         }
     }
@@ -411,7 +411,7 @@ fn compute_move_gains_default_l2r(
 ) {
     from.par_iter_mut().for_each(|doc| {
         let mut doc_gain = 0.0f32;
-        for term in &doc.terms {
+        for (term, _) in &doc.postings {
             let from_deg = fdeg[*term as usize];
             let to_deg = tdeg[*term as usize];
             let term_gain = expb(log2_from, log2_to, from_deg, to_deg)
@@ -432,7 +432,7 @@ fn compute_move_gains_default_r2l(
 ) {
     from.par_iter_mut().for_each(|doc| {
         let mut doc_gain = 0.0f32;
-        for term in &doc.terms {
+        for (term, _) in &doc.postings {
             let from_deg = fdeg[*term as usize];
             let to_deg = tdeg[*term as usize];
             let term_gain = expb(log2_from, log2_to, from_deg, to_deg)
@@ -456,7 +456,7 @@ fn compute_move_gains_a1_l2r(
 ) {
     from.par_iter_mut().for_each(|doc| {
         let mut doc_gain = 0.0f32;
-        for term in &doc.terms {
+        for (term, _) in &doc.postings {
             let from_deg = fdeg[*term as usize];
             let to_deg = tdeg[*term as usize];
             let term_gain = approx_one_a(log2_to, log2_from, to_deg, from_deg);
@@ -476,7 +476,7 @@ fn compute_move_gains_a1_r2l(
 ) {
     from.par_iter_mut().for_each(|doc| {
         let mut doc_gain = 0.0f32;
-        for term in &doc.terms {
+        for (term, _) in &doc.postings {
             let from_deg = fdeg[*term as usize];
             let to_deg = tdeg[*term as usize];
             let term_gain = approx_one_a(log2_to, log2_from, to_deg, from_deg);
@@ -500,7 +500,7 @@ fn compute_move_gains_a2(
 ) {
     from.par_iter_mut().for_each(|doc| {
         let mut doc_gain = 0.0f32;
-        for term in &doc.terms {
+        for (term, _) in &doc.postings {
             let from_deg = fdeg[*term as usize];
             let to_deg = tdeg[*term as usize];
             let term_gain = approx_two_s(log2_to, log2_from, to_deg, from_deg);
