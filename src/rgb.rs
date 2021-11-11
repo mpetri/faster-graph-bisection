@@ -637,8 +637,6 @@ fn process_partitions(
     }
 }
 
-
-
 pub fn recursive_graph_bisection(
     docs: &mut [Doc],
     num_terms: usize,
@@ -671,4 +669,56 @@ pub fn recursive_graph_bisection(
             recursive_graph_bisection(&mut right, num_terms, iterations, min_partition_size, max_depth, depth+1, sort_leaf);
         });
     });
+}
+
+pub fn recursive_graph_bisection_at_depth(
+    docs: &mut [Doc],
+    num_terms: usize,
+    iterations: usize,
+    min_partition_size: usize,
+    max_depth: usize,
+    depth: usize,
+    sort_leaf: bool,
+    process_depth: usize,
+) {
+    // recursion end?
+    if docs.len() <= min_partition_size || depth > max_depth {
+        // Sort leaf by input identifier
+        if sort_leaf {
+            docs.sort_by(|a, b| a.org_id.cmp(&b.org_id));
+        }
+        return;
+    }
+
+    // Only process if we are at the desired depth
+    if depth == process_depth {
+        process_partitions(docs, num_terms, iterations);
+        return;
+    }
+
+    // Otherwise, we split and continue...
+    let (mut left, mut right) = docs.split_at_mut(docs.len() / 2);
+ 
+    // (2) recurse left and right
+    rayon::scope(|s| {
+        s.spawn(|_| {
+            recursive_graph_bisection_at_depth(&mut left, num_terms, iterations, min_partition_size, max_depth, depth+1, sort_leaf, process_depth);
+        });
+        s.spawn(|_| {
+            recursive_graph_bisection_at_depth(&mut right, num_terms, iterations, min_partition_size, max_depth, depth+1, sort_leaf, process_depth);
+        });
+    });
+}
+
+pub fn recursive_graph_bisection_iterative(
+    docs: &mut [Doc],
+    num_terms: usize,
+    iterations: usize,
+    min_partition_size: usize,
+    max_depth: usize,
+    depth: usize,
+    sort_leaf: bool,
+    process_depth: usize,
+) {
+ 
 }
