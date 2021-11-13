@@ -718,7 +718,11 @@ pub fn recursive_graph_bisection_iterative(
     max_depth: usize,
     depth: usize,
     sort_leaf: bool,
-    process_depth: usize,
 ) {
  
+    for target_depth in 0..max_depth {
+        recursive_graph_bisection_at_depth(docs, num_terms, iterations, min_partition_size, max_depth, depth, sort_leaf, target_depth);
+    }
 }
+ 
+
