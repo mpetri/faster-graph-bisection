@@ -93,7 +93,7 @@ pub fn rewrite_ciff<P: AsRef<std::path::Path>>(docs: &[Doc], input_ciff: P, outp
         id: i32,
         external_id: String,
         length: i32,
-    };
+    }
 
     let mut record = ciff_reader.next();
     while let Some(ciff::CiffRecord::PostingsList(plist)) = record {
